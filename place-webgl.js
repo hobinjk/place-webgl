@@ -1,19 +1,29 @@
+var loadingContainer = document.getElementById('loading-container');
+var loadingText = document.getElementById('loading');
+
 function loadPlaceData() {
   return new Promise(function(resolve, reject) {
     var req = new XMLHttpRequest();
     req.open('GET', 'data/diffs.bin');
     req.responseType = 'arraybuffer';
 
-    req.onload = function() {
+    req.addEventListener('load', function() {
       if (req.response) {
+        loadingContainer.style.display = 'none';
         // Assume platform is little-endian
         resolve(new Uint32Array(req.response));
       }
-    };
+    });
 
-    req.onerror = function(e) {
+    req.addEventListener('progress', function(e) {
+      if (e.lengthComputable) {
+        loadingText.innerHTML = 'Loading... ' + Math.floor(100 * e.loaded / e.total) + '% complete';
+      }
+    });
+
+    req.addEventListener('error', function(e) {
       reject(e);
-    };
+    });
 
     req.send();
   });
