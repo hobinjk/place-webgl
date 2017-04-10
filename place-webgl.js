@@ -4,14 +4,13 @@ var loadingText = document.getElementById('loading');
 function loadPlaceData() {
   return new Promise(function(resolve, reject) {
     var req = new XMLHttpRequest();
-    req.open('GET', 'data/diffs.bin');
+    req.open('GET', 'data/min-diffs.bin');
     req.responseType = 'arraybuffer';
 
     req.addEventListener('load', function() {
       if (req.response) {
         loadingContainer.style.display = 'none';
-        // Assume platform is little-endian
-        resolve(new Uint32Array(req.response));
+        resolve(new Uint8Array(req.response));
       }
     });
 
@@ -33,9 +32,10 @@ var renderer;
 
 loadPlaceData().then(function(placeData) {
   renderer = new Renderer(placeData);
-  while (renderer.time <= startTime) {
+  while (renderer.placeIndex < startIndex) {
     renderer.playbackOne();
   }
+  console.log(renderer.placeIndex);
   renderer.update();
 });
 
@@ -58,12 +58,11 @@ const colorCodes = [
   0x82, 0x00, 0x80
 ];
 const placeSize = 1000;
-const startTime = 1490986860;
+const startIndex = 104476;
 
 function Renderer(placeData) {
   this.placeData = placeData;
   this.placeIndex = 0;
-  this.time = this.placeData[0];
   this.update = this.update.bind(this);
   this.initThree();
   window.requestAnimationFrame(this.update);
@@ -119,15 +118,21 @@ Renderer.prototype.smoothPositions = function() {
 };
 
 Renderer.prototype.playbackOne = function() {
-  var baseIndex = 4 * this.placeIndex;
-  var time = this.placeData[baseIndex + 0];
-  if (time < this.time) {
-    console.log('linearity violation', time, this.time);
-  }
-  this.time = time;
-  var x =  this.placeData[baseIndex + 1];
-  var y = this.placeData[baseIndex + 2];
-  var colorCode = 3 * this.placeData[baseIndex + 3];
+  var baseIndex = 3 * this.placeIndex;
+  var byte0 = this.placeData[baseIndex + 0];
+  var byte1 = this.placeData[baseIndex + 1];
+  var byte2 = this.placeData[baseIndex + 2];
+
+  // data layout (note that the 10 bit uints are little-endian):
+  // | byte 0 | byte 1 | byte 2 |
+  // |01234567|01234567|01234567|
+  // |xxxxxxxx|xxyyyyyy|yyyycccc|
+
+  var x = byte0 | ((byte1 & 0x3) << 8);
+  var y = (byte1 >> 2) | ((byte2 & 0xf) << 6);
+  var color = (byte2 & 0xf0) >> 4;
+
+  var colorCode = 3 * color;
   var colorIndex = 3 * ((placeSize - y - 1) * placeSize + x);
   this.colors[colorIndex + 0] = colorCodes[colorCode + 0];
   this.colors[colorIndex + 1] = colorCodes[colorCode + 1];
@@ -142,3 +147,22 @@ Renderer.prototype.playbackOne = function() {
   this.placeIndex += 1;
 };
 
+// Utility to compress original diffs.bin
+function compress(data) {
+  var output = new Uint8Array((data.length / 4) * 3);
+
+  for (var i = 0; i < data.length / 4; i++) {
+    var time = data[4 * i + 0];
+    var x = data[4 * i + 1];
+    var y = data[4 * i + 2];
+    var color = data[4 * i + 3];
+    // eight low bits of x
+    // two high bits of x, six low bits of y
+    // four high bits of y, four bits of color
+    output[3 * i + 0] = x & 0xff;
+    output[3 * i + 1] = ((x & 0x300) >> 8) | ((y & 0x3f) << 2);
+    output[3 * i + 2] = ((y & 0x3c0) >> 6) | ((color & 0xf) << 4);
+  }
+
+  window.location = URL.createObjectURL(new Blob([output], {type: 'application/octet-binary'}));
+}
