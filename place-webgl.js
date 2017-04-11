@@ -36,7 +36,6 @@ loadPlaceData().then(function(placeData) {
     renderer.playbackOne();
   }
   console.log(renderer.placeIndex);
-  renderer.update();
 });
 
 const colorCodes = [
@@ -65,14 +64,12 @@ function Renderer(placeData) {
   this.placeIndex = 0;
   this.update = this.update.bind(this);
   this.initThree();
-  window.requestAnimationFrame(this.update);
 }
 
 Renderer.prototype.initThree = function() {
 	this.scene = new THREE.Scene();
 
 	this.camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 10000 );
-	this.camera.position.z = 500;
   var size = 1000;
   this.geometry = new THREE.PlaneBufferGeometry(size, size, placeSize - 1, placeSize - 1);
   this.colors = new Uint8Array(placeSize * placeSize * 3);
@@ -87,13 +84,28 @@ Renderer.prototype.initThree = function() {
   // this.geometry.addAttribute('color', new THREE.BufferAttribute(this.colors, 3, true));
   var material = new THREE.MeshBasicMaterial({side: THREE.DoubleSide, map: this.colorTexture});
   this.plane = new THREE.Mesh(this.geometry, material);
+  this.plane.position.z = -500;
   this.scene.add(this.plane);
 
-	this.renderer = new THREE.WebGLRenderer();
-	this.renderer.setSize(window.innerWidth, window.innerHeight);
+	this.renderer = new THREE.WebGLRenderer({antialias: false});
+  this.renderer.setPixelRatio(Math.floor(window.devicePixelRatio));
 
-  var controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
-  controls.enableZoom = true;
+  this.controls = new THREE.VRControls(this.camera);
+  this.effect = new THREE.VREffect(this.renderer);
+  this.effect.setSize(window.innerWidth, window.innerHeight);
+
+  navigator.getVRDisplays().then(function(displays) {
+    if (displays.length > 0) {
+      this.vrDisplay = displays[0];
+      this.vrDisplay.requestAnimationFrame(this.update);
+    }
+  }.bind(this));
+
+  this.onResize = this.onResize.bind(this);
+  this.onVRDisplayPresentChange = this.onVRDisplayPresentChange.bind(this);
+
+  window.addEventListener('resize', this.onResize);
+  window.addEventListener('vrdisplaypresentchange', this.onVRDisplayPresentChange);
 
 	document.body.appendChild(this.renderer.domElement);
 };
@@ -103,9 +115,21 @@ Renderer.prototype.update = function() {
     this.playbackOne();
   }
   this.smoothPositions();
-  this.renderer.render(this.scene, this.camera);
-  window.requestAnimationFrame(this.update);
+  this.controls.update();
+  this.effect.render(this.scene, this.camera);
+  this.vrDisplay.requestAnimationFrame(this.update);
 };
+
+Renderer.prototype.onResize = function() {
+  this.effect.setSize(window.innerWidth, window.innerHeight);
+  this.camera.aspect = window.innerWidth / window.innerHeight;
+  this.camera.updateProjectionMatrix();
+};
+
+Renderer.prototype.onVRDisplayPresentChange = function() {
+  this.onResize();
+};
+
 
 var decayFactor = 0.99;
 var upFactor = 1;
@@ -166,3 +190,7 @@ function compress(data) {
 
   window.location = URL.createObjectURL(new Blob([output], {type: 'application/octet-binary'}));
 }
+
+document.querySelector('button#vr').addEventListener('click', function() {
+  renderer.vrDisplay.requestPresent([{source: renderer.renderer.domElement}]);
+});

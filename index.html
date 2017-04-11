@@ -2,6 +2,10 @@
 <html>
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, shrink-to-fit=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>place-webgl</title>
     <link rel="stylesheet" href="style.css"/>
   </head>
@@ -11,8 +15,11 @@
         Loading...
       </div>
     </div>
+    <button id="vr" style="position: fixed; top: 0; right: 0; z-index: 1; background: white;">DO THE VR</button>
     <script src="three.min.js"></script>
-    <script src="OrbitControls.js"></script>
+    <script src="VRControls.js"></script>
+    <script src="VREffect.js"></script>
+    <script src="webvr-polyfill.min.js"></script>
     <script src="place-webgl.js"></script>
   </body>
 </html>
